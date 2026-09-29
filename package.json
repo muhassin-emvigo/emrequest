@@ -1,0 +1,359 @@
+{
+  "name": "emrequest",
+  "displayName": "emRequest — REST API Client",
+  "description": "Fast, lightweight REST API client for VS Code by Emvigo. Send requests, save collections, use environments, import cURL.",
+  "version": "0.2.0",
+  "publisher": "emvigo",
+  "author": {
+    "name": "Emvigo Technologies"
+  },
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0F172A",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Testing",
+    "Other"
+  ],
+  "keywords": [
+    "rest",
+    "api",
+    "http",
+    "client",
+    "curl",
+    "api testing",
+    "emvigo"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "emrequest",
+          "title": "emRequest",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "emrequest": [
+        {
+          "id": "emrequest.collections",
+          "name": "Collections"
+        },
+        {
+          "id": "emrequest.history",
+          "name": "History"
+        },
+        {
+          "id": "emrequest.environments",
+          "name": "Environments"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "emrequest.collections",
+        "contents": "No collections yet.\n[New Request](command:emrequest.newRequest)\n[New Collection](command:emrequest.newCollection)\n[Import cURL](command:emrequest.importCurl)"
+      },
+      {
+        "view": "emrequest.history",
+        "contents": "Requests you send will show up here."
+      },
+      {
+        "view": "emrequest.environments",
+        "contents": "Environments hold variables like {{baseUrl}}.\n[New Environment](command:emrequest.newEnvironment)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "emrequest.newRequest",
+        "title": "New Request",
+        "category": "emRequest",
+        "icon": "$(add)"
+      },
+      {
+        "command": "emrequest.importCurl",
+        "title": "Import cURL",
+        "category": "emRequest",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "emrequest.newCollection",
+        "title": "New Collection",
+        "category": "emRequest",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "emrequest.renameCollection",
+        "title": "Rename",
+        "category": "emRequest",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "emrequest.deleteCollection",
+        "title": "Delete Collection",
+        "category": "emRequest",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "emrequest.renameRequest",
+        "title": "Rename",
+        "category": "emRequest",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "emrequest.openRequest",
+        "title": "Open Request",
+        "category": "emRequest"
+      },
+      {
+        "command": "emrequest.deleteRequest",
+        "title": "Delete Request",
+        "category": "emRequest",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "emrequest.clearHistory",
+        "title": "Clear History",
+        "category": "emRequest",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "emrequest.deleteHistoryItem",
+        "title": "Remove from History",
+        "category": "emRequest",
+        "icon": "$(close)"
+      },
+      {
+        "command": "emrequest.newEnvironment",
+        "title": "New Environment",
+        "category": "emRequest",
+        "icon": "$(add)"
+      },
+      {
+        "command": "emrequest.editEnvironment",
+        "title": "Edit Environment",
+        "category": "emRequest",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "emrequest.activateEnvironment",
+        "title": "Set Active",
+        "category": "emRequest",
+        "icon": "$(check)"
+      },
+      {
+        "command": "emrequest.deactivateEnvironment",
+        "title": "No Environment",
+        "category": "emRequest",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "emrequest.deleteEnvironment",
+        "title": "Delete Environment",
+        "category": "emRequest",
+        "icon": "$(trash)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "emrequest.newRequest",
+          "when": "view == emrequest.collections",
+          "group": "navigation@1"
+        },
+        {
+          "command": "emrequest.importCurl",
+          "when": "view == emrequest.collections",
+          "group": "navigation@2"
+        },
+        {
+          "command": "emrequest.newCollection",
+          "when": "view == emrequest.collections",
+          "group": "navigation@3"
+        },
+        {
+          "command": "emrequest.clearHistory",
+          "when": "view == emrequest.history",
+          "group": "navigation"
+        },
+        {
+          "command": "emrequest.newEnvironment",
+          "when": "view == emrequest.environments",
+          "group": "navigation@1"
+        },
+        {
+          "command": "emrequest.deactivateEnvironment",
+          "when": "view == emrequest.environments",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "emrequest.newRequest",
+          "when": "view == emrequest.collections && viewItem == collection",
+          "group": "inline@1"
+        },
+        {
+          "command": "emrequest.deleteCollection",
+          "when": "view == emrequest.collections && viewItem == collection",
+          "group": "inline@3"
+        },
+        {
+          "command": "emrequest.renameCollection",
+          "when": "view == emrequest.collections && viewItem == collection",
+          "group": "inline@2"
+        },
+        {
+          "command": "emrequest.renameRequest",
+          "when": "view == emrequest.collections && viewItem == savedRequest",
+          "group": "inline@1"
+        },
+        {
+          "command": "emrequest.deleteRequest",
+          "when": "view == emrequest.collections && viewItem == savedRequest",
+          "group": "inline@2"
+        },
+        {
+          "command": "emrequest.deleteHistoryItem",
+          "when": "view == emrequest.history && viewItem == historyItem",
+          "group": "inline"
+        },
+        {
+          "command": "emrequest.activateEnvironment",
+          "when": "view == emrequest.environments && viewItem == environment",
+          "group": "inline@1"
+        },
+        {
+          "command": "emrequest.editEnvironment",
+          "when": "view == emrequest.environments && viewItem =~ /^environment/",
+          "group": "inline@2"
+        },
+        {
+          "command": "emrequest.deleteEnvironment",
+          "when": "view == emrequest.environments && viewItem =~ /^environment/",
+          "group": "inline@3"
+        },
+        {
+          "command": "emrequest.renameCollection",
+          "when": "view == emrequest.collections && viewItem == collection",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "emrequest.deleteCollection",
+          "when": "view == emrequest.collections && viewItem == collection",
+          "group": "1_edit@2"
+        },
+        {
+          "command": "emrequest.renameRequest",
+          "when": "view == emrequest.collections && viewItem == savedRequest",
+          "group": "1_edit@1"
+        },
+        {
+          "command": "emrequest.deleteRequest",
+          "when": "view == emrequest.collections && viewItem == savedRequest",
+          "group": "1_edit@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "emrequest.openRequest",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.deleteRequest",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.deleteHistoryItem",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.renameCollection",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.deleteCollection",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.editEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.activateEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.deleteEnvironment",
+          "when": "false"
+        },
+        {
+          "command": "emrequest.renameRequest",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "emRequest",
+      "properties": {
+        "emrequest.timeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "Request timeout in milliseconds."
+        },
+        "emrequest.historyLimit": {
+          "type": "number",
+          "default": 100,
+          "description": "How many requests to keep in History."
+        },
+        "emrequest.followRedirects": {
+          "type": "boolean",
+          "default": true,
+          "description": "Follow HTTP redirects (up to 10)."
+        },
+        "emrequest.rejectUnauthorized": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reject self-signed / invalid TLS certificates. Turn off for local dev servers."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "emrequest.renameRequest",
+        "key": "f2",
+        "when": "focusedView == emrequest.collections && viewItem == savedRequest"
+      },
+      {
+        "command": "emrequest.renameCollection",
+        "key": "f2",
+        "when": "focusedView == emrequest.collections && viewItem == collection"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/test/core.test.js",
+    "package": "vsce package",
+    "publish:vsce": "vsce publish",
+    "publish:ovsx": "ovsx publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.4.0",
+    "ovsx": "^0.10.0"
+  }
+}
