@@ -70,6 +70,21 @@ npx ovsx publish emrequest-<version>.vsix -p <OPEN_VSX_TOKEN>
 ```
 Open VSX runs automatic checks (for secrets, blocked files, name look-alikes). If it rejects the upload, fix the issue and publish again.
 
+### Cursor
+Cursor gets its extensions from Open VSX, so once Part C is done emRequest shows up in Cursor's Extensions search. You don't need a separate upload.
+- It can take **a few hours** to appear, because Cursor copies from Open VSX on a schedule and runs its own security scan first.
+- If it still doesn't appear, check `engines.vscode` in `package.json`. It must not be newer than the VS Code version Cursor is built on (see Cursor → Help → About). Ours is `^1.85.0`, which is safely low.
+- **Cursor "verified" badge:** add a page on emvigotech.com that links to the Open VSX listing, set `"homepage"` in `package.json` to that page, then post a request in Cursor's forum category *Extension Verification*.
+- To use it before it's listed: in Cursor, open Extensions → `…` → **Install from VSIX…** and pick the `.vsix`.
+
+### Antigravity (Google)
+Antigravity also uses Open VSX by default, so Part C covers it too. No separate upload is needed.
+- To install from the file: Extensions → `…` → **Install from VSIX…**, or run `antigravity --install-extension emrequest-<version>.vsix`.
+  - On a Mac where `antigravity` isn't on the PATH, the tool is at `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity`.
+
+### Internal rollout before it's public
+Send the team the `.vsix` together with `scripts/install.sh` (Mac/Linux) or `scripts/install.ps1` (Windows). The script finds VS Code, Cursor, Antigravity and Windsurf on the machine and installs emRequest into each one it finds.
+
 ---
 
 ## Release checklist
@@ -80,6 +95,7 @@ Open VSX runs automatic checks (for secrets, blocked files, name look-alikes). I
 - [ ] Installed the `.vsix` locally and clicked through: send, save, rename, environments, cURL import
 - [ ] Uploaded to the VS Code Marketplace
 - [ ] Published to Open VSX
+- [ ] Searched for emRequest in Cursor and Antigravity a few hours later
 - [ ] Tagged in git: `git tag v<version> && git push --tags`
 
 ## Things never to do

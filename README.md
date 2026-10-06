@@ -1,4 +1,4 @@
-# emRequest: REST API Client for VS Code
+# emRequest: REST API Client for VS Code, Cursor and Antigravity
 
 A fast, lightweight REST API client that lives in your editor. Built by [Emvigo Technologies](https://www.emvigotech.com).
 
@@ -13,6 +13,18 @@ Test APIs without switching to another app. Send a request, see the response, sa
 - **History**: every request you send is logged. Click one to open it again.
 - **Environments**: variables like `{{baseUrl}}` and `{{token}}` work anywhere in a request. Switch environments from the sidebar or the request tab.
 - **cURL**: paste a cURL command to import it (it reads your clipboard), or copy any request as cURL.
+
+## Install
+
+| Editor | How |
+|---|---|
+| **VS Code** | Extensions view → search **emRequest** (VS Code Marketplace) |
+| **Cursor** | Extensions view → search **emRequest** (comes from Open VSX) |
+| **Antigravity** | Extensions view → search **emRequest** (comes from Open VSX) |
+| **Windsurf / VSCodium** | Extensions view → search **emRequest** (Open VSX) |
+| **Any of them, from a file** | Extensions → `…` → **Install from VSIX…**, or run `cursor --install-extension emrequest.vsix` (use `code` or `antigravity` for those editors) |
+
+Works with any editor based on VS Code 1.85 or newer.
 
 ## Getting started
 

@@ -1,8 +1,8 @@
 {
   "name": "emrequest",
   "displayName": "emRequest — REST API Client",
-  "description": "Fast, lightweight REST API client for VS Code by Emvigo. Send requests, save collections, use environments, import cURL.",
-  "version": "0.2.0",
+  "description": "Fast, lightweight REST API client by Emvigo for VS Code, Cursor and Antigravity. Send requests, save collections, use environments, import cURL.",
+  "version": "0.2.1",
   "publisher": "emvigo",
   "author": {
     "name": "Emvigo Technologies"
@@ -351,9 +351,9 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "~1.85.0",
     "@vscode/vsce": "^3.0.0",
-    "typescript": "^5.4.0",
-    "ovsx": "^0.10.0"
+    "ovsx": "^0.10.0",
+    "typescript": "^5.4.0"
   }
 }
