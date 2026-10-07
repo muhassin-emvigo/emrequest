@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1
+- Added the source repository link: https://github.com/muhassin-emvigo/emrequest
+
 ## 0.3.0
 - **GraphQL support**: a GraphQL body type with a query editor (highlighting, autocomplete, error underline, Format) and a JSON variables box.
 - Fetch the schema from the endpoint (using the request's own headers and auth), or load a `.graphql` / `.json` schema file. Schemas are saved per endpoint.

@@ -55,4 +55,4 @@ Your collections, history and environments are stored only in VS Code's local st
 
 ## Feedback
 
-Found a bug or want a feature? Open an issue on the project repository.
+Found a bug or want a feature? [Open an issue](https://github.com/muhassin-emvigo/emrequest/issues).

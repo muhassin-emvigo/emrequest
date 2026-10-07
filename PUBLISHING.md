@@ -8,19 +8,19 @@ You do the one-time setup steps once. After that, each new version takes about 5
 
 ## Part A: Put the code on GitHub (one time)
 
-1. Create a repo, e.g. `github.com/<emvigo-org>/emrequest` (public for a public extension).
+1. Create a repo, e.g. `github.com/muhassin-emvigo/emrequest` (public for a public extension).
 2. Push this folder:
    ```bash
    git init && git add . && git commit -m "emRequest 0.2.0"
    git branch -M main
-   git remote add origin https://github.com/<emvigo-org>/emrequest.git
+   git remote add origin https://github.com/muhassin-emvigo/emrequest.git
    git push -u origin main
    ```
 3. Add these lines to `package.json` (replace the URL):
    ```json
-   "repository": { "type": "git", "url": "https://github.com/<emvigo-org>/emrequest.git" },
-   "bugs": { "url": "https://github.com/<emvigo-org>/emrequest/issues" },
-   "homepage": "https://github.com/<emvigo-org>/emrequest#readme",
+   "repository": { "type": "git", "url": "https://github.com/muhassin-emvigo/emrequest.git" },
+   "bugs": { "url": "https://github.com/muhassin-emvigo/emrequest/issues" },
+   "homepage": "https://github.com/muhassin-emvigo/emrequest#readme",
    ```
 4. Optional: add a screenshot. Save it as `media/screenshot.png`, commit it, and add `![emRequest](media/screenshot.png)` to the README. This works once the repo link is in place.
 

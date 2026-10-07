@@ -2,12 +2,20 @@
   "name": "emrequest",
   "displayName": "emRequest — REST API Client",
   "description": "Fast, lightweight REST and GraphQL API client by Emvigo for VS Code, Cursor and Antigravity. Send requests, save collections, use environments, import cURL.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "emvigo",
   "author": {
     "name": "Emvigo Technologies"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muhassin-emvigo/emrequest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/muhassin-emvigo/emrequest/issues"
+  },
+  "homepage": "https://github.com/muhassin-emvigo/emrequest#readme",
   "icon": "media/icon.png",
   "galleryBanner": {
     "color": "#0F172A",
