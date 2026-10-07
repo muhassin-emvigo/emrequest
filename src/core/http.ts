@@ -55,7 +55,19 @@ export function prepareRequest(req: ApiRequest): PreparedRequest {
 
   let body: Buffer | undefined;
   const canHaveBody = !['GET', 'HEAD'].includes(req.method);
-  if (canHaveBody) {
+  if (req.bodyType === 'graphql') {
+    const g = graphqlPayload(req);
+    setHeader('Accept', 'application/graphql-response+json, application/json');
+    if (canHaveBody) {
+      body = Buffer.from(JSON.stringify(g), 'utf8');
+      setHeader('Content-Type', 'application/json');
+    } else {
+      // GraphQL over GET: query, variables and operationName travel in the URL
+      url.searchParams.set('query', g.query);
+      if (g.variables !== undefined) { url.searchParams.set('variables', JSON.stringify(g.variables)); }
+      if (g.operationName) { url.searchParams.set('operationName', g.operationName); }
+    }
+  } else if (canHaveBody) {
     switch (req.bodyType) {
       case 'json':
         body = Buffer.from(req.body, 'utf8');
@@ -86,6 +98,32 @@ export function prepareRequest(req: ApiRequest): PreparedRequest {
   if (body) { setHeader('Content-Length', String(body.length)); }
 
   return { method: req.method, url: url.toString(), headers, body };
+}
+
+export interface GraphqlPayload {
+  query: string;
+  variables?: unknown;
+  operationName?: string;
+}
+
+/** Build the standard GraphQL request object. Throws a readable error for bad variables JSON. */
+export function graphqlPayload(req: ApiRequest): GraphqlPayload {
+  const g = req.graphql ?? { query: '', variables: '' };
+  if (!g.query.trim()) { throw new Error('GraphQL query is empty'); }
+  const out: GraphqlPayload = { query: g.query };
+  const vars = (g.variables ?? '').trim();
+  if (vars) {
+    try {
+      out.variables = JSON.parse(vars);
+    } catch (e: any) {
+      throw new Error(`GraphQL variables are not valid JSON: ${e.message}`);
+    }
+    if (out.variables === null || typeof out.variables !== 'object' || Array.isArray(out.variables)) {
+      throw new Error('GraphQL variables must be a JSON object, like { "id": 1 }');
+    }
+  }
+  if (g.operationName?.trim()) { out.operationName = g.operationName.trim(); }
+  return out;
 }
 
 function once(prep: PreparedRequest, opts: SendOptions): Promise<{ res: http.IncomingMessage; data: Buffer }> {

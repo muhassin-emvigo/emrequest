@@ -154,9 +154,18 @@ export function parseCurl(command: string): ApiRequest {
     const ctIdx = headers.findIndex(h => h.key.toLowerCase() === 'content-type');
     const ct = ctIdx >= 0 ? headers[ctIdx].value.toLowerCase() : '';
     const trimmed = body.trim();
-    if (ct.includes('json') || (!ct && /^[\[{]/.test(trimmed))) {
+    let parsed: any;
+    try { parsed = JSON.parse(trimmed); } catch { parsed = undefined; }
+    if ((ct.includes('json') || ct.includes('graphql') || !ct) && isGraphqlPayload(parsed)) {
+      req.bodyType = 'graphql';
+      req.graphql = {
+        query: parsed.query,
+        variables: parsed.variables && typeof parsed.variables === 'object' ? JSON.stringify(parsed.variables, null, 2) : '',
+        operationName: typeof parsed.operationName === 'string' ? parsed.operationName : '',
+      };
+    } else if (ct.includes('json') || (!ct && /^[\[{]/.test(trimmed))) {
       req.bodyType = 'json';
-      try { req.body = JSON.stringify(JSON.parse(trimmed), null, 2); } catch { req.body = body; }
+      req.body = parsed !== undefined ? JSON.stringify(parsed, null, 2) : body;
     } else if (ct.includes('xml')) {
       req.bodyType = 'xml'; req.body = body;
     } else if (!ct || ct.includes('x-www-form-urlencoded')) {
@@ -172,6 +181,25 @@ export function parseCurl(command: string): ApiRequest {
 
   const m = (method ?? (forceGet ? 'GET' : (body || formParts.length ? 'POST' : 'GET'))) as HttpMethod;
   req.method = METHODS.includes(m) ? m : 'GET';
+
+  // GraphQL over GET: ?query={...}&variables={...}&operationName=X
+  const qp = req.params.find(p => p.key === 'query');
+  if (req.method === 'GET' && req.bodyType === 'none' && qp && /^\s*(\{|query\b|mutation\b)/.test(qp.value)) {
+    const take = (k: string) => {
+      const i = req.params.findIndex(p => p.key === k);
+      return i >= 0 ? req.params.splice(i, 1)[0].value : '';
+    };
+    const query = take('query');
+    let variables = take('variables');
+    try { if (variables) { variables = JSON.stringify(JSON.parse(variables), null, 2); } } catch { /* keep as typed */ }
+    req.bodyType = 'graphql';
+    req.graphql = { query, variables, operationName: take('operationName') };
+  }
   try { req.name = `${req.method} ${new URL(/^https?:/i.test(url) ? url : 'http://' + url).pathname}`; } catch { req.name = `${req.method} ${url}`; }
   return req;
+}
+
+function isGraphqlPayload(v: any): v is { query: string; variables?: unknown; operationName?: string } {
+  return !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.query === 'string'
+    && Object.keys(v).every(k => ['query', 'variables', 'operationName', 'extensions'].includes(k));
 }

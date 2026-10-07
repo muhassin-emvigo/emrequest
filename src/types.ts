@@ -6,7 +6,15 @@ export interface KeyValue {
   enabled: boolean;
 }
 
-export type BodyType = 'none' | 'json' | 'text' | 'form' | 'xml';
+export type BodyType = 'none' | 'json' | 'text' | 'form' | 'xml' | 'graphql';
+
+/** GraphQL body. Sent as JSON on POST, or as URL parameters when the method is GET. */
+export interface GraphqlBody {
+  query: string;
+  /** JSON text, so the user can type {{env}} variables and half-finished JSON without losing it */
+  variables: string;
+  operationName?: string;
+}
 
 export type AuthType = 'none' | 'bearer' | 'basic' | 'apikey';
 
@@ -31,6 +39,8 @@ export interface ApiRequest {
   body: string;
   formBody: KeyValue[];
   auth: AuthConfig;
+  /** Only present for GraphQL requests; older saved requests simply don't have it */
+  graphql?: GraphqlBody;
 }
 
 export interface ApiResponse {

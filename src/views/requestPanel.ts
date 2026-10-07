@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import { Store } from '../storage';
-import { ApiRequest, newId } from '../types';
+import { ApiRequest, blankRequest, newId } from '../types';
 import { sendRequest, prepareRequest } from '../core/http';
 import { envToMap, resolveRequest } from '../core/variables';
 import { pageHtml } from './webviewUtil';
@@ -43,7 +44,8 @@ export class RequestPanel {
       localResourceRoots: [vscode.Uri.joinPath(ctx.extensionUri, 'media')],
     });
     this.panel.iconPath = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'icon.svg');
-    this.panel.webview.html = pageHtml(this.panel.webview, ctx.extensionUri, 'request.js', REQUEST_BODY);
+    this.panel.webview.html = pageHtml(this.panel.webview, ctx.extensionUri, 'request.js', REQUEST_BODY,
+      { 'graphql-editor': 'graphql-editor.js' });
     RequestPanel.panels.set(request.id, this);
 
     this.panel.onDidDispose(() => { this.abort?.abort(); RequestPanel.panels.delete(this.request.id); });
@@ -92,6 +94,21 @@ export class RequestPanel {
         this.request = { ...m.request, id: this.request.id };
         await this.copyCurl();
         break;
+      case 'fetchSchema':
+        await this.fetchSchema(m.request, m.introspectionQuery);
+        break;
+      case 'getCachedSchema':
+        await this.postCachedSchema(m.request);
+        break;
+      case 'loadSchemaFile':
+        await this.loadSchemaFile(m.request);
+        break;
+      case 'clearSchema': {
+        const key = this.schemaKey(m.request);
+        if (key) { try { await vscode.workspace.fs.delete(this.schemaFile(key)); } catch { /* not cached */ } }
+        this.panel.webview.postMessage({ type: 'schema', schema: null });
+        break;
+      }
       case 'openInEditor': {
         const doc = await vscode.workspace.openTextDocument({ content: m.content, language: m.language || 'plaintext' });
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
@@ -151,6 +168,89 @@ export class RequestPanel {
     this.panel.webview.postMessage({ type: 'saved', collectionName: this.collectionName(), name: this.request.name });
   }
 
+  // ---------- GraphQL schema: download, cache per endpoint, load from file ----------
+
+  /** Cache key = the endpoint after {{env}} values are filled in, without the query string. */
+  private schemaKey(req: ApiRequest): string | undefined {
+    try {
+      const url = resolveRequest(req, envToMap(this.store.getActiveEnvironment())).url.trim();
+      const u = new URL(/^https?:\/\//i.test(url) ? url : 'http://' + url);
+      return `${u.origin}${u.pathname}`;
+    } catch { return undefined; }
+  }
+
+  private schemaFile(key: string): vscode.Uri {
+    const hash = crypto.createHash('sha1').update(key).digest('hex').slice(0, 16);
+    return vscode.Uri.joinPath(this.ctx.globalStorageUri, 'graphql-schemas', `${hash}.json`);
+  }
+
+  private async saveSchema(key: string, text: string, source: 'endpoint' | 'file', name?: string) {
+    const record = { endpoint: key, savedAt: Date.now(), source, name, text };
+    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(this.ctx.globalStorageUri, 'graphql-schemas'));
+    await vscode.workspace.fs.writeFile(this.schemaFile(key), Buffer.from(JSON.stringify(record), 'utf8'));
+    return record;
+  }
+
+  private async postCachedSchema(req: ApiRequest) {
+    const key = this.schemaKey(req);
+    if (!key) { this.panel.webview.postMessage({ type: 'schema', schema: null }); return; }
+    try {
+      const raw = await vscode.workspace.fs.readFile(this.schemaFile(key));
+      this.panel.webview.postMessage({ type: 'schema', schema: JSON.parse(Buffer.from(raw).toString('utf8')), cached: true });
+    } catch {
+      this.panel.webview.postMessage({ type: 'schema', schema: null, endpoint: key });
+    }
+  }
+
+  /** Sends the standard schema (introspection) query with this request's own URL, headers and auth. */
+  private async fetchSchema(req: ApiRequest, introspectionQuery: string) {
+    const key = this.schemaKey(req);
+    if (!key) { this.panel.webview.postMessage({ type: 'schemaError', error: 'Enter a valid endpoint URL first.' }); return; }
+    const probe = resolveRequest({
+      ...blankRequest(),
+      ...req,
+      method: 'POST',
+      bodyType: 'graphql',
+      graphql: { query: introspectionQuery, variables: '', operationName: 'IntrospectionQuery' },
+    }, envToMap(this.store.getActiveEnvironment()));
+    const res = await sendRequest(probe, this.cfg());
+    if (res.error) { this.panel.webview.postMessage({ type: 'schemaError', error: res.error }); return; }
+    if (res.status < 200 || res.status >= 300) {
+      this.panel.webview.postMessage({ type: 'schemaError', error: `The server answered ${res.status} ${res.statusText}. It may need auth headers, or it may not allow schema downloads.` });
+      return;
+    }
+    let body: any;
+    try { body = JSON.parse(res.body); } catch { body = undefined; }
+    if (!body?.data?.__schema) {
+      const reason = body?.errors?.[0]?.message;
+      this.panel.webview.postMessage({
+        type: 'schemaError',
+        error: reason
+          ? `The server refused the schema request: ${reason}. Many live APIs switch this off; use "Load file" with a schema file instead.`
+          : 'The response is not a GraphQL schema. Check the endpoint URL.',
+      });
+      return;
+    }
+    const record = await this.saveSchema(key, res.body, 'endpoint');
+    this.panel.webview.postMessage({ type: 'schema', schema: record });
+  }
+
+  private async loadSchemaFile(req: ApiRequest) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: 'Use this schema',
+      filters: { 'GraphQL schema': ['graphql', 'graphqls', 'gql', 'json'], 'All files': ['*'] },
+    });
+    if (!picked?.[0]) { return; }
+    const text = Buffer.from(await vscode.workspace.fs.readFile(picked[0])).toString('utf8');
+    const name = picked[0].path.split('/').pop();
+    const key = this.schemaKey(req);
+    const record = key
+      ? await this.saveSchema(key, text, 'file', name)
+      : { endpoint: '', savedAt: Date.now(), source: 'file', name, text };
+    this.panel.webview.postMessage({ type: 'schema', schema: record });
+  }
+
   private async copyCurl() {
     try {
       const resolved = resolveRequest(this.request, envToMap(this.store.getActiveEnvironment()));
@@ -208,6 +308,7 @@ const REQUEST_BODY = /* html */ `
       <button data-tab="headers">Headers <span class="count" id="c-headers"></span></button>
       <button data-tab="auth">Auth</button>
       <button data-tab="body">Body</button>
+      <button data-tab="schema" id="schemaTabBtn" class="hidden">Schema</button>
     </nav>
     <div class="tab-body" data-group="req" data-tab="params"><div id="params"></div></div>
     <div class="tab-body hidden" data-group="req" data-tab="headers"><div id="headers"></div></div>
@@ -242,12 +343,37 @@ const REQUEST_BODY = /* html */ `
         <label><input type="radio" name="bodyType" value="xml"> XML</label>
         <label><input type="radio" name="bodyType" value="text"> Text</label>
         <label><input type="radio" name="bodyType" value="form"> Form (urlencoded)</label>
+        <label><input type="radio" name="bodyType" value="graphql"> GraphQL</label>
         <span class="spacer"></span>
         <button id="format" class="secondary small">Format JSON</button>
       </div>
       <textarea id="body" class="code" spellcheck="false" placeholder='{ "hello": "world" }'></textarea>
       <div id="formBody" class="hidden"></div>
+      <div id="gqlPane" class="gql hidden">
+        <div class="gql-toolbar">
+          <label class="muted" id="opWrap">Operation <select id="gqlOp"></select></label>
+          <span class="spacer"></span>
+          <span id="schemaStatus" class="muted small"></span>
+          <button id="gqlFetchSchema" class="secondary small" title="Download the schema from this endpoint">Fetch schema</button>
+          <button id="gqlFormat" class="secondary small">Format</button>
+        </div>
+        <div id="gqlQuery" class="gql-query"><div class="empty small" id="gqlLoading">Loading GraphQL editor…</div></div>
+        <label class="gql-vars-label muted" for="gqlVars">Variables (JSON)</label>
+        <textarea id="gqlVars" class="code gql-vars" spellcheck="false" placeholder='{ "id": "1" }'></textarea>
+        <p id="gqlNote" class="muted small hidden">GET sends the query and variables in the URL. Switch to POST for large queries.</p>
+      </div>
       <p id="bodyNote" class="muted hidden">GET and HEAD requests are sent without a body.</p>
+    </div>
+    <div class="tab-body hidden" data-group="req" data-tab="schema">
+      <div class="gql-toolbar">
+        <span id="schemaInfo" class="muted small"></span>
+        <span class="spacer"></span>
+        <button id="schemaFetch2" class="secondary small">Fetch schema</button>
+        <button id="schemaFile" class="secondary small" title="Open a .graphql (SDL) or introspection .json file">Load file</button>
+        <button id="schemaClear" class="secondary small">Forget</button>
+      </div>
+      <div id="schemaError" class="error small hidden"></div>
+      <div id="explorer" class="explorer"></div>
     </div>
   </section>
   <section class="pane response">
@@ -267,6 +393,7 @@ const REQUEST_BODY = /* html */ `
       <div id="placeholder" class="empty">Press <b>Send</b> (or Ctrl/Cmd + Enter) to see the response here.</div>
       <div id="loading" class="empty hidden"><span class="spinner"></span> Sending… <button id="cancel" class="secondary small">Cancel</button></div>
       <div id="error" class="error hidden"></div>
+      <div id="gqlErrors" class="gql-errors hidden"></div>
       <pre id="respBody" class="code hidden"></pre>
     </div>
     <div class="tab-body hidden" data-group="res" data-tab="rheaders"><table id="respHeaders" class="kv-static"></table></div>

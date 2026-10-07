@@ -99,3 +99,42 @@ pre.code { margin: 0; white-space: pre-wrap; word-break: break-word; overflow: a
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .env-page { max-width: 900px; overflow: auto; }
+
+/* ---------- GraphQL ---------- */
+.small { font-size: 12px; }
+.gql { flex: 1; display: flex; flex-direction: column; min-height: 0; gap: 6px; }
+.gql-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.gql-toolbar label { display: flex; align-items: center; gap: 6px; }
+.gql-query { flex: 2; min-height: 180px; display: flex; flex-direction: column; overflow: hidden; }
+.gql-query > .cm-editor { flex: 1; min-height: 0; }
+.gql-fallback { flex: 1; resize: none; min-height: 180px; }
+.gql-vars-label { font-size: 12px; margin-top: 4px; }
+.gql-vars { flex: 1; min-height: 70px; resize: vertical; }
+.gql-errors { border: 1px solid var(--vscode-inputValidation-errorBorder); background: var(--vscode-inputValidation-errorBackground); border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; }
+.gql-errors-head { font-weight: 600; color: var(--vscode-errorForeground); margin-bottom: 4px; }
+.gql-errors ul { margin: 0; padding-left: 18px; }
+.gql-errors li { margin: 2px 0; font-family: var(--vscode-editor-font-family); font-size: 12px; }
+
+/* schema explorer */
+.explorer { flex: 1; overflow: auto; font-size: 12.5px; }
+.gx-bar { display: flex; gap: 6px; margin-bottom: 8px; position: sticky; top: 0; background: var(--vscode-editor-background); padding-bottom: 4px; }
+.gx-search { flex: 1; }
+.gx-back { background: transparent; color: var(--vscode-textLink-foreground); padding: 4px 6px; }
+.gx-back:hover { background: transparent; text-decoration: underline; }
+.gx-typebox { margin-bottom: 14px; }
+.gx-head { display: flex; gap: 8px; align-items: baseline; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 4px; margin-bottom: 4px; }
+.gx-kind { color: var(--vscode-descriptionForeground); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.gx-name { font-weight: 700; font-size: 13.5px; }
+.gx-field { padding: 4px 0 4px 2px; border-bottom: 1px solid var(--vscode-panel-border); font-family: var(--vscode-editor-font-family); }
+.gx-line { display: flex; flex-wrap: wrap; align-items: baseline; }
+.gx-add { background: transparent; color: var(--vscode-textLink-foreground); padding: 0 6px 0 0; font-weight: 700; font-size: 14px; }
+.gx-add:hover { background: transparent; color: var(--vscode-textLink-activeForeground); }
+.gx-fname { color: var(--vscode-debugTokenExpression-name, #9cdcfe); }
+.gx-arg { color: var(--vscode-symbolIcon-variableForeground, var(--vscode-foreground)); }
+.gx-punct { color: var(--vscode-descriptionForeground); white-space: pre; }
+.gx-type { background: transparent; color: var(--vscode-symbolIcon-classForeground, #4ec9b0); padding: 0; font-family: inherit; font-size: inherit; }
+.gx-type:hover { background: transparent; text-decoration: underline; }
+.gx-desc { margin: 2px 0 0 18px; color: var(--vscode-descriptionForeground); font-family: var(--vscode-font-family); }
+.gx-deprecated { margin: 2px 0 0 18px; color: var(--vscode-editorWarning-foreground); font-family: var(--vscode-font-family); }
+.gx-muted { color: var(--vscode-descriptionForeground); }
+.gx-empty { color: var(--vscode-descriptionForeground); padding: 16px 0; }

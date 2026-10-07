@@ -28,6 +28,11 @@ export function resolveRequest(req: ApiRequest, vars: Record<string, string>): A
     headers: subList(req.headers, vars),
     body: substitute(req.body, vars),
     formBody: subList(req.formBody, vars),
+    graphql: req.graphql && {
+      query: substitute(req.graphql.query, vars),
+      variables: substitute(req.graphql.variables, vars),
+      operationName: substitute(req.graphql.operationName ?? '', vars),
+    },
     auth: {
       ...a,
       token: substitute(a.token ?? '', vars),

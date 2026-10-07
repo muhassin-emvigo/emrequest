@@ -9,3 +9,5 @@ PUBLISHING.md
 package-lock.json
 media/icon.html
 scripts/**
+webview/**
+test-ui/**

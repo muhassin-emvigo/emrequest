@@ -39,6 +39,14 @@
     req.formBody = formTable.getRows();
     req.body = $('body').value;
     req.bodyType = document.querySelector('input[name="bodyType"]:checked')?.value || 'none';
+    if (req.bodyType === 'graphql' || req.graphql) {
+      const ops = currentOperations();
+      req.graphql = {
+        query: gqlQueryText(),
+        variables: $('gqlVars').value,
+        operationName: ops.length > 1 ? $('gqlOp').value : '',
+      };
+    }
     req.auth = {
       type: $('authType').value,
       token: $('token').value,
@@ -59,7 +67,9 @@
 
   function setMethodColor() {
     $('method').dataset.m = $('method').value;
-    $('bodyNote').classList.toggle('hidden', !['GET', 'HEAD'].includes($('method').value));
+    const isGql = (document.querySelector('input[name="bodyType"]:checked')?.value) === 'graphql';
+    $('bodyNote').classList.toggle('hidden', isGql || !['GET', 'HEAD'].includes($('method').value));
+    $('gqlNote').classList.toggle('hidden', !(isGql && $('method').value === 'GET'));
   }
 
   function showAuth() {
@@ -69,9 +79,20 @@
 
   function showBody() {
     const t = document.querySelector('input[name="bodyType"]:checked')?.value || 'none';
-    $('body').classList.toggle('hidden', t === 'none' || t === 'form');
+    $('body').classList.toggle('hidden', t === 'none' || t === 'form' || t === 'graphql');
     $('formBody').classList.toggle('hidden', t !== 'form');
     $('format').classList.toggle('hidden', t !== 'json');
+    $('gqlPane').classList.toggle('hidden', t !== 'graphql');
+    $('schemaTabBtn').classList.toggle('hidden', t !== 'graphql');
+    // leaving GraphQL while the Schema tab is open → go back to Body
+    if (t !== 'graphql' && !document.querySelector('.tab-body[data-tab="schema"]').classList.contains('hidden')) {
+      document.querySelector('nav.tabs[data-group="req"] button[data-tab="body"]').click();
+    }
+    setMethodColor();
+    if (t === 'graphql') {
+      loadGraphqlEditor();
+      requestCachedSchema();
+    }
   }
 
   // ---------- tables ----------
@@ -102,6 +123,11 @@
     $('apiKeyName').value = a.apiKeyName || '';
     $('apiKeyValue').value = a.apiKeyValue || '';
     $('apiKeyIn').value = a.apiKeyIn || 'header';
+    gql.pendingQuery = r.graphql?.query || '';
+    gql.pendingOp = r.graphql?.operationName || '';
+    if (gql.editor) gql.editor.setValue(gql.pendingQuery);
+    $('gqlVars').value = r.graphql?.variables || '';
+    refreshOperations();
     setMethodColor(); showAuth(); showBody(); updateCounts();
     $('url').focus();
   }
@@ -114,6 +140,9 @@
     req.params = [...params, ...disabled];
     paramsTable.setRows(req.params);
     changed();
+    // a new endpoint may have its own saved schema
+    clearTimeout(gql.urlTimer);
+    gql.urlTimer = setTimeout(requestCachedSchema, 600);
   });
   $('url').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   $('method').addEventListener('change', () => { setMethodColor(); changed(); });
@@ -122,6 +151,14 @@
   ['token', 'username', 'password', 'apiKeyName', 'apiKeyValue'].forEach(id => $(id).addEventListener('input', changed));
   $('apiKeyIn').addEventListener('change', changed);
   document.querySelectorAll('input[name="bodyType"]').forEach(r => r.addEventListener('change', () => {
+    if (r.value === 'graphql') {
+      // GraphQL is almost always POST; GET stays possible by switching back
+      if (['GET', 'HEAD'].includes($('method').value)) $('method').value = 'POST';
+      if (!gqlQueryText().trim()) {
+        gql.pendingQuery = 'query {\n  \n}';
+        if (gql.editor) gql.editor.setValue(gql.pendingQuery);
+      }
+    }
     showBody();
     // auto add a JSON skeleton the first time
     if (r.value === 'json' && !$('body').value.trim()) $('body').value = '{\n  \n}';
@@ -150,6 +187,7 @@
   $('env').addEventListener('change', () => vscode.postMessage({ type: 'setEnv', id: $('env').value }));
 
   document.addEventListener('keydown', e => {
+    if (e.defaultPrevented) return; // already handled inside the GraphQL editor
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); send(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); vscode.postMessage({ type: 'save', request: collect() }); }
   });
@@ -216,6 +254,7 @@
     $('error').classList.add('hidden');
     $('respBody').classList.add('hidden');
     $('loading').classList.remove('hidden');
+    $('gqlErrors').classList.add('hidden');
     $('send').disabled = true;
   }
 
@@ -232,6 +271,7 @@
       $('error').textContent = res.error;
       $('error').classList.remove('hidden');
       $('respBody').classList.add('hidden');
+      $('gqlErrors').classList.add('hidden');
       $('respHeaders').replaceChildren();
       $('c-rheaders').textContent = '';
       return;
@@ -246,6 +286,7 @@
     if (p.lang === 'json') pre.innerHTML = highlightJson(p.text);
     else pre.textContent = p.text || '(empty body)';
     pre.classList.remove('hidden');
+    showGraphqlErrors(res);
 
     const table = $('respHeaders');
     table.replaceChildren();
@@ -256,6 +297,191 @@
       tr.append(a, b); table.appendChild(tr);
     });
     $('c-rheaders').textContent = String(Object.keys(res.headers).length);
+  }
+
+  // ---------- GraphQL ----------
+  const gql = {
+    editor: null,        // set once the editor bundle has loaded
+    explorer: null,
+    loading: null,       // promise while the bundle loads
+    pendingQuery: '',    // query text kept until the editor exists
+    pendingOp: '',
+    pendingRecord: undefined,
+    schemaRecord: null,
+    urlTimer: 0,
+    opTimer: 0,
+  };
+
+  function gqlQueryText() { return gql.editor ? gql.editor.getValue() : gql.pendingQuery; }
+
+  function parseOperationNames(q) {
+    if (window.EmGraphQL) return window.EmGraphQL.operationNames(q);
+    const out = []; const re = /\b(query|mutation|subscription)\s+([_A-Za-z][_0-9A-Za-z]*)/g; let m;
+    while ((m = re.exec(q))) out.push(m[2]);
+    return out;
+  }
+  function currentOperations() { return parseOperationNames(gqlQueryText()); }
+
+  /** Show the operation picker only when the query holds more than one named operation. */
+  function refreshOperations() {
+    const names = currentOperations();
+    const sel = $('gqlOp');
+    const keep = sel.value || gql.pendingOp;
+    sel.replaceChildren(...names.map(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; return o; }));
+    if (names.includes(keep)) sel.value = keep;
+    $('opWrap').classList.toggle('hidden', names.length < 2);
+  }
+
+  function loadGraphqlEditor() {
+    if (gql.loading) return gql.loading;
+    gql.loading = new Promise((resolve, reject) => {
+      if (window.EmGraphQL) { resolve(); return; }
+      const s = document.createElement('script');
+      s.nonce = document.body.dataset.nonce;
+      s.src = document.body.dataset.graphqlEditor;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('editor failed to load'));
+      document.body.appendChild(s);
+    }).then(() => {
+      const G = window.EmGraphQL;
+      $('gqlQuery').replaceChildren();
+      gql.editor = G.createEditor({
+        parent: $('gqlQuery'),
+        doc: gql.pendingQuery,
+        nonce: document.body.dataset.nonce,
+        onChange: () => { clearTimeout(gql.opTimer); gql.opTimer = setTimeout(refreshOperations, 300); changed(); },
+        onShowInDocs: (typeName) => { if (typeName) { openSchemaTab(); gql.explorer.show(typeName); } },
+        onRun: send,
+      });
+      gql.explorer = G.createExplorer($('explorer'), {
+        onInsert: text => {
+          document.querySelector('nav.tabs[data-group="req"] button[data-tab="body"]').click();
+          gql.editor.insertAtCursor(text);
+        },
+      });
+      refreshOperations();
+      if (gql.pendingRecord !== undefined) { const r = gql.pendingRecord; gql.pendingRecord = undefined; applySchemaRecord(r); }
+    }).catch(() => {
+      // Fallback: a plain text box, so GraphQL still works without autocomplete
+      const ta = document.createElement('textarea');
+      ta.className = 'code gql-fallback'; ta.spellcheck = false; ta.value = gql.pendingQuery;
+      ta.addEventListener('input', () => { refreshOperations(); changed(); });
+      $('gqlQuery').replaceChildren(ta);
+      gql.editor = {
+        getValue: () => ta.value, setValue: v => { ta.value = v; }, setSchema() {}, focus: () => ta.focus(),
+        insertAtCursor: t => { const p = ta.selectionStart; ta.value = ta.value.slice(0, p) + t + ta.value.slice(ta.selectionEnd); },
+        format() { throw new Error('Formatting needs the GraphQL editor, which could not load'); },
+      };
+      setSchemaStatus('Editor could not load; autocomplete is off', true);
+    });
+    return gql.loading;
+  }
+
+  function openSchemaTab() {
+    document.querySelector('nav.tabs[data-group="req"] button[data-tab="schema"]').click();
+  }
+
+  function requestCachedSchema() {
+    if (!req || !req.url) { applySchemaRecord(null); return; }
+    vscode.postMessage({ type: 'getCachedSchema', request: collect() });
+  }
+
+  function timeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+    return Math.floor(s / 86400) + ' days ago';
+  }
+
+  function setSchemaStatus(text, isErr) {
+    $('schemaStatus').textContent = text;
+    $('schemaStatus').classList.toggle('err', !!isErr);
+    $('schemaInfo').textContent = text;
+    $('schemaInfo').classList.toggle('err', !!isErr);
+  }
+
+  function applySchemaRecord(record) {
+    if (!window.EmGraphQL || !gql.editor || !gql.explorer) { gql.pendingRecord = record; return; }
+    $('schemaError').classList.add('hidden');
+    gql.schemaRecord = record;
+    if (!record) {
+      gql.editor.setSchema(null);
+      gql.explorer.setSchema(null);
+      setSchemaStatus('No schema · autocomplete off');
+      return;
+    }
+    try {
+      const schema = window.EmGraphQL.schemaFromText(record.text);
+      gql.editor.setSchema(schema);
+      gql.explorer.setSchema(schema);
+      const from = record.source === 'file' ? `from ${record.name || 'file'}` : 'from endpoint';
+      const count = Object.keys(schema.getTypeMap()).filter(n => !n.startsWith('__')).length;
+      setSchemaStatus(`Schema ${from} · ${count} types · ${timeAgo(record.savedAt)}`);
+    } catch (e) {
+      gql.editor.setSchema(null);
+      gql.explorer.setSchema(null);
+      showSchemaError(e.message);
+    }
+  }
+
+  function showSchemaError(msg) {
+    $('schemaError').textContent = msg;
+    $('schemaError').classList.remove('hidden');
+    setSchemaStatus('Schema not loaded', true);
+    [$('gqlFetchSchema'), $('schemaFetch2')].forEach(b => { b.disabled = false; });
+  }
+
+  function fetchSchema() {
+    if (!$('url').value.trim()) { flash('Enter the GraphQL endpoint URL first', true); return; }
+    loadGraphqlEditor().then(() => {
+      if (!window.EmGraphQL) { showSchemaError('The GraphQL editor could not load, so the schema cannot be read.'); return; }
+      setSchemaStatus('Fetching schema…');
+      [$('gqlFetchSchema'), $('schemaFetch2')].forEach(b => { b.disabled = true; });
+      vscode.postMessage({ type: 'fetchSchema', request: collect(), introspectionQuery: window.EmGraphQL.introspectionQuery });
+    });
+  }
+
+  $('gqlFetchSchema').addEventListener('click', fetchSchema);
+  $('schemaFetch2').addEventListener('click', fetchSchema);
+  $('schemaFile').addEventListener('click', () => vscode.postMessage({ type: 'loadSchemaFile', request: collect() }));
+  $('schemaClear').addEventListener('click', () => vscode.postMessage({ type: 'clearSchema', request: collect() }));
+  $('gqlOp').addEventListener('change', changed);
+  $('gqlVars').addEventListener('input', changed);
+  $('gqlFormat').addEventListener('click', () => {
+    if (!gql.editor) return;
+    try { gql.editor.format(); changed(); }
+    catch (e) { flash('Cannot format: ' + e.message, true); }
+  });
+  window.addEventListener('message', e => {
+    if (e.data && e.data.type === 'schema') [$('gqlFetchSchema'), $('schemaFetch2')].forEach(b => { b.disabled = false; });
+  });
+
+  /** GraphQL servers report failures inside a 200 OK response, so surface them clearly. */
+  function showGraphqlErrors(res) {
+    const box = $('gqlErrors');
+    let body;
+    try { body = JSON.parse(res.body); } catch { body = null; }
+    const errors = body && Array.isArray(body.errors) ? body.errors.filter(x => x && typeof x.message === 'string') : [];
+    if (!errors.length) { box.classList.add('hidden'); return; }
+    const st = $('status');
+    st.textContent += ` · ${errors.length} GraphQL error${errors.length > 1 ? 's' : ''}`;
+    st.className = 'badge s-err';
+    const head = document.createElement('div');
+    head.className = 'gql-errors-head';
+    head.textContent = body.data ? `GraphQL errors (${errors.length}) · partial data returned` : `GraphQL errors (${errors.length})`;
+    const list = document.createElement('ul');
+    errors.forEach(er => {
+      const li = document.createElement('li');
+      li.textContent = er.message;
+      const where = [];
+      if (Array.isArray(er.path)) where.push('at ' + er.path.join('.'));
+      if (Array.isArray(er.locations) && er.locations[0]) where.push(`line ${er.locations[0].line}, col ${er.locations[0].column}`);
+      if (where.length) { const sm = document.createElement('span'); sm.className = 'muted'; sm.textContent = '  ' + where.join(' · '); li.appendChild(sm); }
+      list.appendChild(li);
+    });
+    box.replaceChildren(head, list);
+    box.classList.remove('hidden');
   }
 
   // ---------- messages from extension ----------
@@ -278,8 +504,12 @@
           sel.appendChild(o);
         });
         sel.value = m.activeEnvId;
+        // the endpoint may use {{env}} values, so its saved schema may differ
+        if (req && req.bodyType === 'graphql') requestCachedSchema();
         break;
       }
+      case 'schema': applySchemaRecord(m.schema); break;
+      case 'schemaError': showSchemaError(m.error); break;
       case 'sending': showSending(); break;
       case 'response': showResponse(m.response); break;
       case 'renamed':

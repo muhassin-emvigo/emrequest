@@ -1,8 +1,8 @@
 {
   "name": "emrequest",
   "displayName": "emRequest — REST API Client",
-  "description": "Fast, lightweight REST API client by Emvigo for VS Code, Cursor and Antigravity. Send requests, save collections, use environments, import cURL.",
-  "version": "0.2.1",
+  "description": "Fast, lightweight REST and GraphQL API client by Emvigo for VS Code, Cursor and Antigravity. Send requests, save collections, use environments, import cURL.",
+  "version": "0.3.0",
   "publisher": "emvigo",
   "author": {
     "name": "Emvigo Technologies"
@@ -28,7 +28,8 @@
     "client",
     "curl",
     "api testing",
-    "emvigo"
+    "emvigo",
+    "graphql"
   ],
   "main": "./out/extension.js",
   "activationEvents": [],
@@ -342,17 +343,23 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && npm run build:webview",
     "watch": "tsc -watch -p ./",
-    "test": "npm run compile && node --test out/test/core.test.js",
-    "package": "vsce package",
+    "test": "npm run compile && node --test out/test/core.test.js out/test/graphql.test.js",
+    "package": "vsce package && node scripts/check-size.js",
     "publish:vsce": "vsce publish",
-    "publish:ovsx": "ovsx publish"
+    "publish:ovsx": "ovsx publish",
+    "build:webview": "esbuild webview/graphql-editor.js --bundle --minify --format=iife --target=es2020 --legal-comments=eof --outfile=media/graphql-editor.js",
+    "test:ui": "npm run compile && node test-ui/graphql-ui.test.js && node test-ui/host-schema.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "~1.85.0",
     "@vscode/vsce": "^3.0.0",
+    "cm6-graphql": "^0.2.2",
+    "codemirror": "^6.0.2",
+    "esbuild": "^0.28.2",
+    "graphql": "^16.14.2",
     "ovsx": "^0.10.0",
     "typescript": "^5.4.0"
   }
